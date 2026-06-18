@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>세모세모 게임</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+
+.screen { display: none; background: #f0ede8; border-radius: 16px; border: 0.5px solid rgba(0,0,0,0.1); overflow: hidden; }
+.screen.active { display: flex; }
+
+#screen-start { min-height: 520px; max-width: 700px; width: 100%; }
+.start-left { width: 260px; flex-shrink: 0; background: #E1F5EE; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; gap: 20px; }
+.start-right { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 40px 36px; gap: 20px; }
+.game-title { font-size: 30px; font-weight: 500; color: #085041; letter-spacing: -0.5px; }
+.score-pills { display: flex; flex-direction: column; gap: 8px; }
+.score-pill { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 99px; font-size: 13px; font-weight: 500; }
+.pill-green { background: #E1F5EE; color: #085041; }
+.pill-red { background: #FCEBEB; color: #791F1F; }
+.pill-shape { width: 22px; height: 22px; flex-shrink: 0; }
+.btn-start { width: 100%; padding: 14px; background: #1D9E75; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+.btn-start:hover { background: #0F6E56; }
+.btn-start:active { transform: scale(0.98); }
+.btn-ranking-link { width: 100%; padding: 10px; background: transparent; color: #555; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 8px; font-size: 13px; cursor: pointer; }
+.btn-ranking-link:hover { background: rgba(0,0,0,0.04); }
+.divider { height: 0.5px; background: rgba(0,0,0,0.1); margin: 4px 0; }
+
+#screen-game { flex-direction: row; background: transparent; border: none; gap: 16px; padding: 0; align-items: flex-start; max-width: 700px; width: 100%; }
+#sidebar { width: 185px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+.stat-card { background: #f0ede8; border-radius: 8px; padding: 10px 14px; border: 0.5px solid rgba(0,0,0,0.08); }
+.stat-label { font-size: 11px; color: #666; margin-bottom: 2px; }
+.stat-value { font-size: 24px; font-weight: 500; color: #222; }
+.stat-value.positive { color: #1D9E75; }
+.stat-value.negative { color: #E24B4A; }
+.stat-value.danger { color: #E24B4A; font-size: 28px; }
+#log { font-size: 11px; color: #666; line-height: 1.6; max-height: 140px; overflow-y: auto; }
+.log-entry { padding: 2px 0; border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+.log-entry.good { color: #1D9E75; }
+.log-entry.bad { color: #E24B4A; }
+#canvas-wrap { flex: 1; position: relative; }
+#game-canvas { border: 0.5px solid rgba(0,0,0,0.15); border-radius: 12px; cursor: crosshair; display: block; background: white; }
+#preview-canvas, #fx-canvas { position: absolute; top: 0; left: 0; pointer-events: none; border-radius: 12px; }
+.btn-sm { width: 100%; padding: 8px; font-size: 13px; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 8px; background: transparent; color: #444; cursor: pointer; }
+.btn-sm:hover { background: rgba(0,0,0,0.04); }
+#gmsg { font-size: 11px; color: #666; min-height: 28px; line-height: 1.5; }
+.rule-box { font-size: 11px; color: #888; line-height: 1.8; padding: 8px 10px; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 8px; background: white; }
+#score-bar-bg { height: 6px; background: rgba(0,0,0,0.08); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+#score-bar { height: 6px; background: #1D9E75; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+
+#screen-end { min-height: 520px; max-width: 700px; width: 100%; }
+.end-left { width: 260px; flex-shrink: 0; background: #FCEBEB; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px; gap: 20px; }
+.end-right { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 40px 36px; gap: 20px; }
+.gameover-title { font-size: 38px; font-weight: 500; color: #791F1F; letter-spacing: 2px; }
+.result-row { display: flex; flex-direction: column; gap: 10px; }
+.result-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: white; border-radius: 8px; border: 0.5px solid rgba(0,0,0,0.08); font-size: 13px; }
+.result-label { color: #666; }
+.result-value { font-weight: 500; color: #222; }
+.result-value.red { color: #E24B4A; }
+.btn-restart { width: 100%; padding: 14px; background: #E24B4A; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+.btn-restart:hover { background: #A32D2D; }
+.btn-restart:active { transform: scale(0.98); }
+#nick-input { width: 100%; padding: 9px 12px; font-size: 14px; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 8px; background: white; color: #222; outline: none; }
+#nick-input:focus { border-color: #378ADD; }
+.btn-submit { width: 100%; padding: 12px; background: #378ADD; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn-submit:hover { background: #2569B5; }
+.btn-submit:disabled { background: #aac6e5; cursor: not-allowed; }
+#submit-status { font-size: 12px; color: #666; min-height: 16px; }
+
+#screen-ranking { min-height: 520px; max-width: 700px; width: 100%; flex-direction: column; padding: 32px 36px; gap: 18px; }
+.ranking-header { display: flex; align-items: center; justify-content: space-between; }
+.ranking-title { font-size: 18px; font-weight: 500; color: #222; }
+.btn-back { font-size: 13px; color: #555; background: transparent; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+.btn-back:hover { background: rgba(0,0,0,0.04); }
+.rank-list { display: flex; flex-direction: column; gap: 4px; max-height: 400px; overflow-y: auto; }
+.rank-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; font-size: 13px; }
+.rank-row:nth-child(even) { background: rgba(0,0,0,0.03); }
+.rank-num { width: 26px; text-align: center; font-size: 12px; color: #666; font-weight: 500; }
+.rank-num.gold { font-size: 18px; }
+.rank-num.silver { font-size: 18px; }
+.rank-num.bronze { font-size: 18px; }
+.rank-name { flex: 1; color: #222; }
+.rank-lines { font-weight: 500; color: #222; }
+.rank-lines span { font-size: 11px; font-weight: 400; color: #999; margin-left: 2px; }
+.rank-date { font-size: 11px; color: #999; min-width: 70px; text-align: right; }
+.rank-empty { font-size: 13px; color: #999; text-align: center; padding: 40px 0; }
+.rank-loading { font-size: 13px; color: #999; text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+
+<div id="screen-start" class="screen active">
+  <div class="start-left">
+    <svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+      <line x1="20" y1="140" x2="140" y2="140" stroke="#1D9E75" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="20" y1="140" x2="80" y2="30" stroke="#1D9E75" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="80" y1="30" x2="140" y2="140" stroke="#1D9E75" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="5" y1="95" x2="155" y2="75" stroke="#222" stroke-width="2" stroke-linecap="round"/>
+      <line x1="30" y1="20" x2="110" y2="155" stroke="#222" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="80" cy="85" r="3.5" fill="#444"/>
+      <circle cx="48" cy="128" r="3.5" fill="#444"/>
+      <circle cx="112" cy="128" r="3.5" fill="#444"/>
+      <circle cx="37" cy="88" r="3" fill="#888"/>
+      <circle cx="76" cy="30" r="3" fill="#888"/>
+    </svg>
+    <div style="font-size:12px;color:#0F6E56;text-align:center;line-height:1.6;">선을 그어<br>삼각형을 만들어보세요</div>
+  </div>
+  <div class="start-right">
+    <div>
+      <div style="font-size:22px;color:#1D9E75;font-weight:500;margin-bottom:8px;letter-spacing:2px;">△△</div>
+      <div class="game-title">세모세모 게임</div>
+    </div>
+    <div style="font-size:13px;color:#666;line-height:1.8;">선을 그려서 세모를 만들자!<br>−100점이 되면 게임 종료예요.</div>
+    <div class="divider"></div>
+    <div class="score-pills">
+      <div class="score-pill pill-green">
+        <svg class="pill-shape" viewBox="0 0 22 22"><polygon points="11,3 21,19 1,19" fill="none" stroke="#1D9E75" stroke-width="2" stroke-linejoin="round"/></svg>
+        세모 (삼각형) +1점
+      </div>
+      <div class="score-pill pill-red">
+        <svg class="pill-shape" viewBox="0 0 22 22"><rect x="2" y="2" width="18" height="18" rx="2" fill="none" stroke="#E24B4A" stroke-width="2"/></svg>
+        네모 (사각형) −1점
+      </div>
+      <div class="score-pill pill-red">
+        <svg class="pill-shape" viewBox="0 0 22 22"><polygon points="11,2 20,8 17,19 5,19 2,8" fill="none" stroke="#E24B4A" stroke-width="2" stroke-linejoin="round"/></svg>
+        오각형 −2점 · 육각형 −3점
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn-start" onclick="goGame()">게임 시작</button>
+      <button class="btn-ranking-link" onclick="goRanking()">🏆 랭킹 보기</button>
+    </div>
+  </div>
+</div>
+
+<div id="screen-game" class="screen">
+  <div id="sidebar">
+    <div class="stat-card">
+      <div class="stat-label">점수 (−100점 게임오버)</div>
+      <div class="stat-value positive" id="score-display">0</div>
+      <div id="score-bar-bg"><div id="score-bar" style="width:100%"></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="stat-card"><div class="stat-label">삼각형</div><div class="stat-value positive" id="tri-display">0</div></div>
+      <div class="stat-card"><div class="stat-label">다각형(4+)</div><div class="stat-value negative" id="poly-display">0</div></div>
+    </div>
+    <div class="stat-card"><div class="stat-label">그린 선분</div><div class="stat-value" id="line-display">0</div></div>
+    <button class="btn-sm" onclick="goStart()">△△ 처음으로</button>
+    <div class="rule-box">
+      삼각형 <span style="color:#1D9E75">+1점</span><br>
+      사각형 <span style="color:#E24B4A">−1점</span><br>
+      n각형 <span style="color:#E24B4A">−(n−3)점</span><br>
+      삼각형 외부→관통→외부<br>
+      초기 삼각형 점/선 재사용 금지
+    </div>
+    <div id="gmsg"></div>
+    <div><div class="stat-label" style="margin-bottom:4px;">기록</div><div id="log"></div></div>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="game-canvas" width="455" height="455"></canvas>
+    <canvas id="preview-canvas" width="455" height="455"></canvas>
+    <canvas id="fx-canvas" width="455" height="455"></canvas>
+  </div>
+</div>
+
+<div id="screen-end" class="screen">
+  <div class="end-left">
+    <svg width="140" height="140" viewBox="0 0 140 140" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="70,18 128,118 12,118" fill="none" stroke="#F09595" stroke-width="2.5" stroke-linejoin="round"/>
+      <line x1="10" y1="70" x2="130" y2="70" stroke="#F09595" stroke-width="2" stroke-linecap="round" stroke-dasharray="6,4"/>
+      <line x1="50" y1="10" x2="90" y2="130" stroke="#F09595" stroke-width="2" stroke-linecap="round" stroke-dasharray="6,4"/>
+      <text x="70" y="82" text-anchor="middle" font-size="32" fill="#E24B4A" font-family="sans-serif">×</text>
+    </svg>
+    <div style="font-size:12px;color:#A32D2D;text-align:center;line-height:1.6;">−100점 달성<br>게임이 종료되었어요</div>
+  </div>
+  <div class="end-right">
+    <div>
+      <div style="font-size:22px;color:#E24B4A;font-weight:500;margin-bottom:8px;letter-spacing:2px;">△△</div>
+      <div class="gameover-title">GAME OVER</div>
+    </div>
+    <div class="result-row">
+      <div class="result-item"><span class="result-label">그린 선분</span><span class="result-value" id="end-lines">—</span></div>
+      <div class="result-item"><span class="result-label">최고 점수</span><span class="result-value" id="end-best">—</span></div>
+      <div class="result-item"><span class="result-label">최종 점수</span><span class="result-value red" id="end-score">—</span></div>
+    </div>
+    <div class="divider"></div>
+    <input id="nick-input" type="text" placeholder="닉네임을 입력하고 랭킹에 등록해보세요" maxlength="16" />
+    <button class="btn-submit" id="submit-btn" onclick="submitScore()">랭킹 등록</button>
+    <div id="submit-status"></div>
+    <button class="btn-restart" onclick="goGame()">↺ 다시 시작</button>
+  </div>
+</div>
+
+<div id="screen-ranking" class="screen">
+  <div class="ranking-header">
+    <div class="ranking-title">🏆 랭킹 — 선분을 가장 많이 그린 플레이어</div>
+    <button class="btn-back" onclick="goStart()">← 돌아가기</button>
+  </div>
+  <div id="rank-list-wrap" class="rank-list">
+    <div class="rank-loading">불러오는 중...</div>
+  </div>
+</div>
+
+<script>
+// ===== Supabase 설정 =====
+const SUPABASE_URL = 'https://dreohutkhdrrhefjsumn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyZW9odXRraGRycmhlZmpzdW1uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3NzQxMDksImV4cCI6MjA5NzM1MDEwOX0.AJLv9DXhhvPrEBAbINPwlKaii5h1pDMIfdty-AxSMDQ';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const canvas = document.getElementById('game-canvas');
+const pCanvas = document.getElementById('preview-canvas');
+const fxCanvas = document.getElementById('fx-canvas');
+const ctx = canvas.getContext('2d');
+const pCtx = pCanvas.getContext('2d');
+const fxCtx = fxCanvas.getContext('2d');
+const W = 455, H = 455, SNAP = 10, REQUIRED = 2, GAME_OVER = -100, REUSE_SNAP = 18;
+
+let lines=[], vertices=[], edges=[];
+let score=0, bestScore=0, prevPolygons={tri:0,polys:[]};
+let dragging=false, startPt=null, logEntries=[], gameOver=false;
+let triPts=[];
+let lastLineIntersections = [];
+let floaters = [];
+let fxRunning = false;
+let scoreSubmitted = false;
+
+function pt(x,y){return{x,y};}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function cross(o,a,b){return(a.x-o.x)*(b.y-o.y)-(a.y-o.y)*(b.x-o.x);}
+
+function segIntersect(p1,p2,p3,p4){
+  const d1=cross(p3,p4,p1),d2=cross(p3,p4,p2);
+  const d3=cross(p1,p2,p3),d4=cross(p1,p2,p4);
+  if(((d1>0&&d2<0)||(d1<0&&d2>0))&&((d3>0&&d4<0)||(d3<0&&d4>0))){
+    const t=d1/(d1-d2);
+    return pt(p1.x+t*(p2.x-p1.x),p1.y+t*(p2.y-p1.y));
+  }
+  return null;
+}
+
+function isInsideTriangle(p){
+  const a=triPts[0], b=triPts[1], c=triPts[2];
+  const d1=cross(a,b,p),d2=cross(b,c,p),d3=cross(c,a,p);
+  return !((d1<0||d2<0||d3<0)&&(d1>0||d2>0||d3>0));
+}
+
+function ptEq(a,b){return dist(a,b)<SNAP;}
+
+function addVertex(p){
+  for(let i=0;i<vertices.length;i++) if(ptEq(vertices[i],p)) return i;
+  vertices.push({x:p.x,y:p.y}); return vertices.length-1;
+}
+function addEdge(i,j){
+  if(i===j) return;
+  const key=i<j?`${i}-${j}`:`${j}-${i}`;
+  for(const e of edges) if((e.a<e.b?`${e.a}-${e.b}`:`${e.b}-${e.a}`)===key) return;
+  edges.push({a:i,b:j});
+}
+
+function rebuildGraph(){
+  vertices=[];edges=[];
+  const sp=lines.map(l=>[pt(l.x1,l.y1),pt(l.x2,l.y2)]);
+  const ap=lines.map(l=>[pt(l.x1,l.y1),pt(l.x2,l.y2)]);
+  for(let i=0;i<lines.length;i++)
+    for(let j=i+1;j<lines.length;j++){
+      const ip=segIntersect(sp[i][0],sp[i][1],sp[j][0],sp[j][1]);
+      if(ip){ap[i].push(ip);ap[j].push(ip);}
+    }
+  for(let i=0;i<lines.length;i++){
+    const p0=sp[i][0],p1=sp[i][1],dx=p1.x-p0.x,dy=p1.y-p0.y;
+    const pts=ap[i];
+    pts.sort((a,b)=>(dx*(a.x-p0.x)+dy*(a.y-p0.y))-(dx*(b.x-p0.x)+dy*(b.y-p0.y)));
+    const dd=[pts[0]];
+    for(let k=1;k<pts.length;k++) if(!ptEq(pts[k],dd[dd.length-1])) dd.push(pts[k]);
+    for(let k=0;k<dd.length-1;k++) addEdge(addVertex(dd[k]),addVertex(dd[k+1]));
+  }
+}
+
+function buildAdj(){
+  const adj={};
+  for(let i=0;i<vertices.length;i++) adj[i]=new Set();
+  for(const e of edges){adj[e.a].add(e.b);adj[e.b].add(e.a);}
+  return adj;
+}
+
+function findCycles(adj,maxLen){
+  const n=vertices.length,found=new Set(),cycles=[];
+  function dfs(start,cur,path,visited){
+    if(path.length>maxLen) return;
+    for(const nb of adj[cur]){
+      if(path.length>=3&&nb===start){
+        const key=[...path].sort((a,b)=>a-b).join(',');
+        if(!found.has(key)){found.add(key);cycles.push([...path]);}
+        continue;
+      }
+      if(!visited.has(nb)&&nb>start){
+        visited.add(nb);path.push(nb);
+        dfs(start,nb,path,visited);
+        path.pop();visited.delete(nb);
+      }
+    }
+  }
+  for(let i=0;i<n;i++) dfs(i,i,[i],new Set([i]));
+  return cycles;
+}
+
+function isSimpleCycle(c,adj){
+  const s=new Set(c);
+  for(const v of c){
+    let cnt=0;
+    for(const nb of adj[v]) if(s.has(nb)) cnt++;
+    if(cnt!==2) return false;
+  }
+  return true;
+}
+
+function isInitialTriangleCycle(cycle){
+  if(cycle.length!==3) return false;
+  for(const vi of cycle){
+    const v=vertices[vi];
+    let matched=false;
+    for(const tp of triPts){
+      if(dist(v,tp)<SNAP){matched=true;break;}
+    }
+    if(!matched) return false;
+  }
+  return true;
+}
+
+function computePolygons(){
+  rebuildGraph();
+  const adj=buildAdj();
+  const all=findCycles(adj,10).filter(c=>isSimpleCycle(c,adj));
+  return all.filter(c=>!isInitialTriangleCycle(c));
+}
+
+function getIntersectionsWithAllLines(p1,p2){
+  const pts=[];
+  for(let i=0;i<lines.length;i++){
+    const l=lines[i];
+    const ip=segIntersect(p1,p2,pt(l.x1,l.y1),pt(l.x2,l.y2));
+    if(ip) pts.push(ip);
+  }
+  return pts;
+}
+
+function countInitialIntersections(p1,p2){
+  let cnt=0;
+  for(let i=0;i<3;i++){
+    if(segIntersect(p1,p2,pt(lines[i].x1,lines[i].y1),pt(lines[i].x2,lines[i].y2))) cnt++;
+  }
+  return cnt;
+}
+
+function isOnInitialTriangle(p){
+  for(const tp of triPts){
+    if(dist(p,tp)<REUSE_SNAP) return true;
+  }
+  for(let i=0;i<3;i++){
+    const l=lines[i];
+    const len=dist(pt(l.x1,l.y1),pt(l.x2,l.y2));
+    const t=((p.x-l.x1)*(l.x2-l.x1)+(p.y-l.y1)*(l.y2-l.y1))/(len*len);
+    const cx=l.x1+t*(l.x2-l.x1), cy=l.y1+t*(l.y2-l.y1);
+    if(dist(p,pt(cx,cy))<REUSE_SNAP) return true;
+  }
+  return false;
+}
+
+function reusesLastIntersections(newPts){
+  if(lastLineIntersections.length===0) return false;
+  for(const np of newPts){
+    if(!isOnInitialTriangle(np)) continue;
+    for(const lp of lastLineIntersections){
+      if(!isOnInitialTriangle(lp)) continue;
+      if(dist(np,lp)<REUSE_SNAP) return true;
+    }
+  }
+  return false;
+}
+
+function validateLine(p1,p2){
+  if(isInsideTriangle(p1)) return{ok:false,msg:'시작점이 삼각형 내부예요'};
+  if(isInsideTriangle(p2)) return{ok:false,msg:'끝점이 삼각형 내부예요'};
+  const cnt=countInitialIntersections(p1,p2);
+  if(cnt<2) return{ok:false,msg:`초기 선 ${cnt}개 관통 중 — 2개 필요해요`};
+  const allPts=getIntersectionsWithAllLines(p1,p2);
+  if(reusesLastIntersections(allPts)) return{ok:false,msg:'초기 삼각형의 직전 지점은 다시 지날 수 없어요'};
+  return{ok:true,msg:`${cnt}개 관통 — 유효!`};
+}
+
+function getPos(e){
+  const r=canvas.getBoundingClientRect();
+  return pt(e.clientX-r.left,e.clientY-r.top);
+}
+function insideCanvas(p){return p.x>=2&&p.y>=2&&p.x<=W-2&&p.y<=H-2;}
+
+function drawAll(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='white';ctx.fillRect(0,0,W,H);
+  ctx.beginPath();
+  ctx.moveTo(triPts[0].x,triPts[0].y);
+  ctx.lineTo(triPts[1].x,triPts[1].y);
+  ctx.lineTo(triPts[2].x,triPts[2].y);
+  ctx.closePath();
+  ctx.fillStyle='rgba(29,158,117,0.06)';ctx.fill();
+  for(let i=0;i<lines.length;i++){
+    const l=lines[i];
+    ctx.strokeStyle=i<3?'#1D9E75':'#222';
+    ctx.lineWidth=2;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(l.x1,l.y1);ctx.lineTo(l.x2,l.y2);ctx.stroke();
+  }
+  ctx.fillStyle='#444';
+  for(const v of vertices){ctx.beginPath();ctx.arc(v.x,v.y,3,0,Math.PI*2);ctx.fill();}
+}
+
+function updateScoreBar(s){
+  const bar=document.getElementById('score-bar');
+  const pct=Math.max(0,Math.min(100,(s+100)/100*100));
+  bar.style.width=pct+'%';
+  bar.style.background=s<-50?'#E24B4A':s<0?'#EF9F27':'#1D9E75';
+}
+
+const polyNames={3:'삼각형',4:'사각형',5:'오각형',6:'육각형',7:'칠각형',8:'팔각형'};
+function polyName(n){return polyNames[n]||(n+'각형');}
+
+function addLog(text,cls){
+  logEntries.unshift({text,cls});
+  if(logEntries.length>25) logEntries.pop();
+  document.getElementById('log').innerHTML=logEntries.map(e=>`<div class="log-entry ${e.cls}">${e.text}</div>`).join('');
+}
+
+function setMsg(text,color){
+  const el=document.getElementById('gmsg');
+  el.textContent=text;el.style.color=color||'#666';
+}
+
+function spawnFloater(text, cls){
+  floaters.push({
+    text, cls,
+    x: W/2 + (Math.random()*60-30),
+    y: 36,
+    life: 0,
+    maxLife: 70
+  });
+  if(!fxRunning) runFx();
+}
+
+function runFx(){
+  fxRunning = true;
+  function frame(){
+    fxCtx.clearRect(0,0,W,H);
+    for(const f of floaters){
+      f.life++;
+    }
+    floaters = floaters.filter(f => f.life <= f.maxLife);
+    for(const f of floaters){
+      const t = f.life / f.maxLife;
+      const yPos = f.y - t*46;
+      const alpha = t < 0.15 ? t/0.15 : 1 - (t-0.15)/0.85;
+      fxCtx.globalAlpha = Math.max(0, alpha);
+      fxCtx.font = '500 13px sans-serif';
+      fxCtx.textAlign = 'center';
+      fxCtx.fillStyle = f.cls === 'good' ? '#1D9E75' : '#E24B4A';
+      fxCtx.fillText(f.text, f.x, yPos);
+    }
+    fxCtx.globalAlpha = 1;
+    if(floaters.length > 0){
+      requestAnimationFrame(frame);
+    } else {
+      fxRunning = false;
+      fxCtx.clearRect(0,0,W,H);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function updateScore(){
+  const polygons=computePolygons();
+  let triCount=0,polyList=[];
+  for(const c of polygons){
+    if(c.length===3) triCount++;
+    else polyList.push(c.length);
+  }
+  const newScore=triCount+polyList.reduce((s,n)=>s-(n-3),0);
+
+  const triDelta=triCount-prevPolygons.tri;
+  if(triDelta>0){ addLog(`삼각형 +${triDelta}개 → +${triDelta}점`,'good'); spawnFloater(`세모 +${triDelta}`, 'good'); }
+  else if(triDelta<0){ addLog(`삼각형 ${triDelta}개 소멸`,'bad'); }
+
+  const prevNs={},newNs={};
+  for(const n of prevPolygons.polys) prevNs[n]=(prevNs[n]||0)+1;
+  for(const n of polyList) newNs[n]=(newNs[n]||0)+1;
+  for(const n of[...new Set([...Object.keys(prevNs),...Object.keys(newNs)].map(Number))]){
+    const diff=(newNs[n]||0)-(prevNs[n]||0);
+    if(diff>0){ addLog(`${polyName(n)} +${diff}개 → ${-(n-3)*diff}점`,'bad'); spawnFloater(`${polyName(n)} ${-(n-3)*diff}`, 'bad'); }
+    else if(diff<0) addLog(`${polyName(n)} ${Math.abs(diff)}개 소멸`,'good');
+  }
+
+  prevPolygons={tri:triCount,polys:polyList};
+  score=newScore;
+  if(score>bestScore) bestScore=score;
+
+  const sd=document.getElementById('score-display');
+  sd.textContent=score;
+  sd.className='stat-value'+(score<-50?' danger':score<0?' negative':' positive');
+  document.getElementById('tri-display').textContent=triCount;
+  document.getElementById('poly-display').textContent=polyList.length;
+  document.getElementById('line-display').textContent=lines.length-3;
+  updateScoreBar(score);
+  drawAll();
+
+  if(score<=GAME_OVER) triggerGameOver();
+}
+
+function triggerGameOver(){
+  gameOver=true;
+  scoreSubmitted=false;
+  document.getElementById('end-lines').textContent=(lines.length-3)+'선';
+  document.getElementById('end-best').textContent=bestScore+'점';
+  document.getElementById('end-score').textContent=score+'점';
+  document.getElementById('nick-input').value='';
+  document.getElementById('submit-status').textContent='';
+  document.getElementById('submit-btn').disabled=false;
+  showScreen('screen-end');
+}
+
+function initLines(){
+  const cx=W/2,cy=H/2,r=170,ext=80;
+  triPts=[0,1,2].map(i=>{
+    const a=-Math.PI/2+i*(2*Math.PI/3);
+    return pt(cx+r*Math.cos(a),cy+r*Math.sin(a));
+  });
+  function extLine(p1,p2){
+    const dx=p2.x-p1.x,dy=p2.y-p1.y,len=Math.hypot(dx,dy),ux=dx/len,uy=dy/len;
+    return{x1:p1.x-ux*ext,y1:p1.y-uy*ext,x2:p2.x+ux*ext,y2:p2.y+uy*ext};
+  }
+  lines=[extLine(triPts[0],triPts[1]),extLine(triPts[1],triPts[2]),extLine(triPts[2],triPts[0])];
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function goStart(){ showScreen('screen-start'); }
+
+function goGame(){
+  logEntries=[];score=0;bestScore=0;prevPolygons={tri:0,polys:[]};
+  gameOver=false;dragging=false;lastLineIntersections=[];floaters=[];
+  document.getElementById('log').innerHTML='';
+  setMsg('');
+  pCtx.clearRect(0,0,W,H);
+  fxCtx.clearRect(0,0,W,H);
+  initLines();
+  showScreen('screen-game');
+  updateScore();
+}
+
+canvas.addEventListener('mousedown',e=>{
+  if(gameOver) return;
+  const p=getPos(e);
+  if(!insideCanvas(p)) return;
+  dragging=true;startPt=p;
+});
+
+canvas.addEventListener('mousemove',e=>{
+  if(!dragging) return;
+  const p=getPos(e);
+  pCtx.clearRect(0,0,W,H);
+  const v=validateLine(startPt,p);
+  pCtx.strokeStyle=v.ok?'rgba(55,138,221,0.6)':'rgba(226,75,74,0.5)';
+  pCtx.lineWidth=1.5;pCtx.setLineDash([5,4]);
+  pCtx.beginPath();pCtx.moveTo(startPt.x,startPt.y);pCtx.lineTo(p.x,p.y);pCtx.stroke();
+  pCtx.setLineDash([]);
+  pCtx.beginPath();pCtx.arc(startPt.x,startPt.y,4,0,Math.PI*2);
+  pCtx.fillStyle='#378ADD';pCtx.fill();
+  setMsg(v.msg,v.ok?'#1D9E75':isInsideTriangle(p)?'#E24B4A':'#BA7517');
+});
+
+canvas.addEventListener('mouseup',e=>{
+  if(!dragging) return;
+  dragging=false;pCtx.clearRect(0,0,W,H);
+  const ep=getPos(e);
+  if(!insideCanvas(startPt)||!insideCanvas(ep)||dist(startPt,ep)<10) return;
+  const v=validateLine(startPt,ep);
+  if(!v.ok){setMsg('⚠ '+v.msg,'#E24B4A');return;}
+  setMsg('');
+  lastLineIntersections = getIntersectionsWithAllLines(startPt,ep);
+  lines.push({x1:startPt.x,y1:startPt.y,x2:ep.x,y2:ep.y});
+  updateScore();
+});
+
+canvas.addEventListener('mouseleave',()=>{if(dragging) pCtx.clearRect(0,0,W,H);});
+
+// ===== 랭킹 (Supabase) =====
+async function submitScore(){
+  if(scoreSubmitted) return;
+  const nickInput = document.getElementById('nick-input');
+  const nickname = nickInput.value.trim();
+  const statusEl = document.getElementById('submit-status');
+  const btn = document.getElementById('submit-btn');
+
+  if(!nickname){
+    statusEl.textContent='닉네임을 입력해주세요';
+    statusEl.style.color='#E24B4A';
+    nickInput.focus();
+    return;
+  }
+
+  btn.disabled=true;
+  statusEl.textContent='등록 중...';
+  statusEl.style.color='#666';
+
+  const lineCount = lines.length - 3;
+
+  try {
+    const { error } = await sb
+      .from('rankings')
+      .insert([{ nickname: nickname, line_count: lineCount }]);
+
+    if(error) throw error;
+
+    scoreSubmitted=true;
+    statusEl.textContent='✓ 랭킹에 등록됐어요!';
+    statusEl.style.color='#1D9E75';
+  } catch(err){
+    console.error(err);
+    statusEl.textContent='등록 실패 — 다시 시도해주세요';
+    statusEl.style.color='#E24B4A';
+    btn.disabled=false;
+  }
+}
+
+async function goRanking(){
+  showScreen('screen-ranking');
+  const wrap = document.getElementById('rank-list-wrap');
+  wrap.innerHTML = '<div class="rank-loading">불러오는 중...</div>';
+
+  try {
+    const { data, error } = await sb
+      .from('rankings')
+      .select('nickname, line_count, created_at')
+      .order('line_count', { ascending: false })
+      .limit(50);
+
+    if(error) throw error;
+
+    if(!data || data.length===0){
+      wrap.innerHTML = '<div class="rank-empty">아직 기록이 없어요.<br>첫 번째 플레이어가 되어보세요!</div>';
+      return;
+    }
+
+    const medals = ['🥇','🥈','🥉'];
+    wrap.innerHTML = data.map((r,i) => {
+      const d = new Date(r.created_at);
+      const dateStr = `${d.getMonth()+1}.${d.getDate()}`;
+      const numHtml = i<3
+        ? `<div class="rank-num ${['gold','silver','bronze'][i]}">${medals[i]}</div>`
+        : `<div class="rank-num">${i+1}</div>`;
+      return `<div class="rank-row">
+        ${numHtml}
+        <div class="rank-name">${escapeHtml(r.nickname)}</div>
+        <div class="rank-lines">${r.line_count}<span>선</span></div>
+        <div class="rank-date">${dateStr}</div>
+      </div>`;
+    }).join('');
+  } catch(err){
+    console.error(err);
+    wrap.innerHTML = '<div class="rank-empty">랭킹을 불러오지 못했어요.<br>잠시 후 다시 시도해주세요.</div>';
+  }
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
